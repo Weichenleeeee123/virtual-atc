@@ -1,0 +1,420 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// ATC 数据库 - 存储机场、航路、频率等信息
+#[derive(Debug, Clone)]
+pub struct ATCDatabase {
+    airports: HashMap<String, Airport>,
+    current_airport: Option<String>,
+}
+
+impl ATCDatabase {
+    pub fn new() -> Self {
+        let mut db = ATCDatabase {
+            airports: HashMap::new(),
+            current_airport: None,
+        };
+        
+        // 预加载一些常用机场
+        db.load_default_airports();
+        db
+    }
+    
+    /// 设置当前机场（根据飞机位置自动检测）
+    pub fn set_current_airport(&mut self, icao: &str) {
+        self.current_airport = Some(icao.to_uppercase());
+    }
+    
+    /// 获取当前机场信息
+    pub fn get_current_airport(&self) -> Option<&Airport> {
+        self.current_airport.as_ref()
+            .and_then(|icao| self.airports.get(icao))
+    }
+    
+    /// 根据经纬度自动检测最近的机场
+    pub fn detect_nearest_airport(&mut self, lat: f64, lon: f64) -> Option<String> {
+        let mut nearest: Option<(String, f64)> = None;
+        
+        for (icao, airport) in &self.airports {
+            let distance = Self::calculate_distance(lat, lon, airport.latitude, airport.longitude);
+            
+            if distance < 50.0 {  // 50公里范围内
+                if let Some((_, min_dist)) = nearest {
+                    if distance < min_dist {
+                        nearest = Some((icao.clone(), distance));
+                    }
+                } else {
+                    nearest = Some((icao.clone(), distance));
+                }
+            }
+        }
+        
+        if let Some((icao, _)) = nearest {
+            self.current_airport = Some(icao.clone());
+            Some(icao)
+        } else {
+            None
+        }
+    }
+    
+    /// 计算两点距离（简化版，单位：公里）
+    fn calculate_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+        let r = 6371.0; // 地球半径（公里）
+        let dlat = (lat2 - lat1).to_radians();
+        let dlon = (lon2 - lon1).to_radians();
+        let a = (dlat / 2.0).sin().powi(2) +
+                lat1.to_radians().cos() * lat2.to_radians().cos() *
+                (dlon / 2.0).sin().powi(2);
+        let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+        r * c
+    }
+    
+    /// 获取 ATC 上下文信息（用于 LLM）
+    pub fn get_atc_context(&self, language: &str) -> String {
+        if let Some(airport) = self.get_current_airport() {
+            airport.format_context(language)
+        } else {
+            if language == "zh" {
+                "未检测到机场信息。请确保飞机在机场附近。".to_string()
+            } else {
+                "No airport detected. Please ensure aircraft is near an airport.".to_string()
+            }
+        }
+    }
+    
+    /// 加载默认机场数据
+    fn load_default_airports(&mut self) {
+        // 北京首都国际机场 (ZBAA)
+        self.airports.insert("ZBAA".to_string(), Airport {
+            icao: "ZBAA".to_string(),
+            name: "北京首都国际机场".to_string(),
+            name_en: "Beijing Capital International Airport".to_string(),
+            latitude: 40.0801,
+            longitude: 116.5846,
+            elevation: 116,
+            runways: vec![
+                Runway {
+                    name: "01/19".to_string(),
+                    heading_1: 10,
+                    heading_2: 190,
+                    length: 3800,
+                    width: 60,
+                },
+                Runway {
+                    name: "18L/36R".to_string(),
+                    heading_1: 180,
+                    heading_2: 360,
+                    length: 3200,
+                    width: 50,
+                },
+                Runway {
+                    name: "18R/36L".to_string(),
+                    heading_1: 180,
+                    heading_2: 360,
+                    length: 3800,
+                    width: 60,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.5, 118.7],
+                ground: vec![121.6, 121.75],
+                departure: vec![125.75, 124.6],
+                approach: vec![119.7, 124.5],
+                atis: vec![127.6],
+            },
+            sids: vec![
+                "BOBAK1A".to_string(),
+                "LADOL1B".to_string(),
+                "LANDA1C".to_string(),
+            ],
+            stars: vec![
+                "AKOMA1A".to_string(),
+                "BAXIX1B".to_string(),
+                "DUMET1C".to_string(),
+            ],
+        });
+        
+        // 上海浦东国际机场 (ZSPD)
+        self.airports.insert("ZSPD".to_string(), Airport {
+            icao: "ZSPD".to_string(),
+            name: "上海浦东国际机场".to_string(),
+            name_en: "Shanghai Pudong International Airport".to_string(),
+            latitude: 31.1434,
+            longitude: 121.8052,
+            elevation: 13,
+            runways: vec![
+                Runway {
+                    name: "16L/34R".to_string(),
+                    heading_1: 160,
+                    heading_2: 340,
+                    length: 4000,
+                    width: 60,
+                },
+                Runway {
+                    name: "16R/34L".to_string(),
+                    heading_1: 160,
+                    heading_2: 340,
+                    length: 3400,
+                    width: 60,
+                },
+                Runway {
+                    name: "17L/35R".to_string(),
+                    heading_1: 170,
+                    heading_2: 350,
+                    length: 3800,
+                    width: 60,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.8, 124.45],
+                ground: vec![121.65, 121.95],
+                departure: vec![120.85, 125.65],
+                approach: vec![119.4, 120.4],
+                atis: vec![127.65],
+            },
+            sids: vec![
+                "AKOMA1A".to_string(),
+                "PIKAS1B".to_string(),
+                "SASAN1C".to_string(),
+            ],
+            stars: vec![
+                "DUMET1A".to_string(),
+                "ELATO1B".to_string(),
+                "PIKAS1C".to_string(),
+            ],
+        });
+        
+        // 广州白云国际机场 (ZGGG)
+        self.airports.insert("ZGGG".to_string(), Airport {
+            icao: "ZGGG".to_string(),
+            name: "广州白云国际机场".to_string(),
+            name_en: "Guangzhou Baiyun International Airport".to_string(),
+            latitude: 23.3924,
+            longitude: 113.2988,
+            elevation: 50,
+            runways: vec![
+                Runway {
+                    name: "02L/20R".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3800,
+                    width: 60,
+                },
+                Runway {
+                    name: "02R/20L".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.2, 118.95],
+                ground: vec![121.6, 121.85],
+                departure: vec![119.0, 125.4],
+                approach: vec![119.85, 120.6],
+                atis: vec![127.4],
+            },
+            sids: vec![
+                "AKAGI1A".to_string(),
+                "BEKOL1B".to_string(),
+            ],
+            stars: vec![
+                "AKAGI1A".to_string(),
+                "IDUMA1B".to_string(),
+            ],
+        });
+        
+        // 成都双流国际机场 (ZUUU)
+        self.airports.insert("ZUUU".to_string(), Airport {
+            icao: "ZUUU".to_string(),
+            name: "成都双流国际机场".to_string(),
+            name_en: "Chengdu Shuangliu International Airport".to_string(),
+            latitude: 30.5785,
+            longitude: 103.9468,
+            elevation: 1625,
+            runways: vec![
+                Runway {
+                    name: "02L/20R".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+                Runway {
+                    name: "02R/20L".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.3, 118.65],
+                ground: vec![121.7, 121.85],
+                departure: vec![119.25, 125.1],
+                approach: vec![119.1, 120.3],
+                atis: vec![127.5],
+            },
+            sids: vec![
+                "AKUMA1A".to_string(),
+                "BEKOL1B".to_string(),
+            ],
+            stars: vec![
+                "AKUMA1A".to_string(),
+                "IDUMA1B".to_string(),
+            ],
+        });
+    }
+}
+
+/// 机场信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Airport {
+    pub icao: String,
+    pub name: String,
+    pub name_en: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub elevation: i32,  // 海拔（米）
+    pub runways: Vec<Runway>,
+    pub frequencies: Frequencies,
+    pub sids: Vec<String>,  // 标准离场程序
+    pub stars: Vec<String>, // 标准进场程序
+}
+
+impl Airport {
+    /// 格式化为 LLM 上下文
+    pub fn format_context(&self, language: &str) -> String {
+        if language == "zh" {
+            format!(
+                r#"## 机场信息：{}（{}）
+
+**基本信息：**
+- ICAO 代码：{}
+- 海拔：{} 米
+- 坐标：{:.4}°N, {:.4}°E
+
+**跑道信息：**
+{}
+
+**通信频率：**
+- 塔台：{} MHz
+- 地面：{} MHz
+- 离场：{} MHz
+- 进近：{} MHz
+- ATIS：{} MHz
+
+**标准离场程序（SID）：**
+{}
+
+**标准进场程序（STAR）：**
+{}
+
+**重要提示：**
+- 必须在指令中使用正确的跑道号
+- 必须在适当时机给出频率切换指令
+- 离场后切换到离场频率，进近时切换到进近频率
+"#,
+                self.name,
+                self.icao,
+                self.icao,
+                self.elevation,
+                self.latitude,
+                self.longitude,
+                self.format_runways(language),
+                self.frequencies.format_list(&self.frequencies.tower),
+                self.frequencies.format_list(&self.frequencies.ground),
+                self.frequencies.format_list(&self.frequencies.departure),
+                self.frequencies.format_list(&self.frequencies.approach),
+                self.frequencies.format_list(&self.frequencies.atis),
+                self.sids.join("、"),
+                self.stars.join("、"),
+            )
+        } else {
+            format!(
+                r#"## Airport Information: {} ({})
+
+**Basic Info:**
+- ICAO Code: {}
+- Elevation: {} meters
+- Coordinates: {:.4}°N, {:.4}°E
+
+**Runways:**
+{}
+
+**Frequencies:**
+- Tower: {} MHz
+- Ground: {} MHz
+- Departure: {} MHz
+- Approach: {} MHz
+- ATIS: {} MHz
+
+**SID (Standard Instrument Departure):**
+{}
+
+**STAR (Standard Terminal Arrival Route):**
+{}
+
+**Important Notes:**
+- MUST use correct runway number in instructions
+- MUST provide frequency change at appropriate time
+- Switch to departure after takeoff, approach before landing
+"#,
+                self.name_en,
+                self.icao,
+                self.icao,
+                self.elevation,
+                self.latitude,
+                self.longitude,
+                self.format_runways(language),
+                self.frequencies.format_list(&self.frequencies.tower),
+                self.frequencies.format_list(&self.frequencies.ground),
+                self.frequencies.format_list(&self.frequencies.departure),
+                self.frequencies.format_list(&self.frequencies.approach),
+                self.frequencies.format_list(&self.frequencies.atis),
+                self.sids.join(", "),
+                self.stars.join(", "),
+            )
+        }
+    }
+    
+    fn format_runways(&self, language: &str) -> String {
+        self.runways.iter().map(|r| {
+            if language == "zh" {
+                format!("- 跑道 {}：长 {} 米，宽 {} 米", r.name, r.length, r.width)
+            } else {
+                format!("- Runway {}: {} m x {} m", r.name, r.length, r.width)
+            }
+        }).collect::<Vec<_>>().join("\n")
+    }
+}
+
+/// 跑道信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Runway {
+    pub name: String,
+    pub heading_1: u16,
+    pub heading_2: u16,
+    pub length: u32,  // 米
+    pub width: u32,   // 米
+}
+
+/// 通信频率
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Frequencies {
+    pub tower: Vec<f32>,      // 塔台
+    pub ground: Vec<f32>,     // 地面
+    pub departure: Vec<f32>,  // 离场
+    pub approach: Vec<f32>,   // 进近
+    pub atis: Vec<f32>,       // 自动终端情报服务
+}
+
+impl Frequencies {
+    fn format_list(&self, freqs: &[f32]) -> String {
+        freqs.iter()
+            .map(|f| format!("{:.2}", f))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}

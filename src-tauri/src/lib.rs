@@ -9,6 +9,7 @@ use modules::llm::LLMClient;
 use modules::tts::TTSEngine;
 use modules::msfs::MSFSConnection;
 use modules::flight_phase::{FlightPhaseDetector, FlightPhase};
+use modules::atc_database::ATCDatabase;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -20,6 +21,7 @@ struct AppState {
     tts: Mutex<TTSEngine>,
     current_sim: Mutex<String>, // "xplane" or "msfs"
     phase_detector: Mutex<FlightPhaseDetector>,
+    atc_database: Mutex<ATCDatabase>,
 }
 
 #[tauri::command]
@@ -204,13 +206,24 @@ async fn get_atc_response(
         _ => None,
     };
     
+    // 自动检测机场（如果��飞行数据）
+    if let Some(ref data) = flight_data {
+        let mut atc_db = state.atc_database.lock().unwrap();
+        atc_db.detect_nearest_airport(data.latitude, data.longitude);
+    }
+    
+    // 获取机场上下文
+    let atc_db = state.atc_database.lock().unwrap();
+    let airport_context = atc_db.get_atc_context(&language);
+    
     // 获取飞行阶段上下文
     let detector = state.phase_detector.lock().unwrap();
     let phase_context = detector.get_atc_context(&language);
     
     // 构建完整的上下文
     let full_context = format!(
-        "当前飞行阶段：{}\n\n{}\n\n飞行员消息：{}",
+        "{}\n\n当前飞行阶段：{}\n\n{}\n\n飞行员消息：{}",
+        airport_context,
         detector.get_current_phase().display_name(),
         phase_context,
         message
@@ -266,6 +279,7 @@ struct FlightDataResponse {
 pub fn run() {
     let llm_client = LLMClient::new();
     let tts_engine = TTSEngine::new();
+    let atc_db = ATCDatabase::new();
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -277,6 +291,7 @@ pub fn run() {
             tts: Mutex::new(tts_engine),
             current_sim: Mutex::new(String::new()),
             phase_detector: Mutex::new(FlightPhaseDetector::new()),
+            atc_database: Mutex::new(atc_db),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,
