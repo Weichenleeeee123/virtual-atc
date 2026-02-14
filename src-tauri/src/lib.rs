@@ -11,6 +11,7 @@ use modules::msfs::MSFSConnection;
 use modules::flight_phase::{FlightPhaseDetector, FlightPhase};
 use modules::atc_database::ATCDatabase;
 use modules::little_navmap::LittleNavmapDB;
+use modules::model_manager::{ModelManager, WhisperModel};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -24,6 +25,7 @@ struct AppState {
     phase_detector: Mutex<FlightPhaseDetector>,
     atc_database: Mutex<ATCDatabase>,
     little_navmap: Mutex<Option<LittleNavmapDB>>,
+    model_manager: Mutex<ModelManager>,
 }
 
 #[tauri::command]
@@ -257,6 +259,91 @@ async fn get_current_phase(state: State<'_, AppState>) -> Result<PhaseInfo, Stri
     })
 }
 
+// ========== 模型管理命令 ==========
+
+#[tauri::command]
+fn get_available_models() -> Vec<WhisperModel> {
+    ModelManager::get_available_models()
+}
+
+#[tauri::command]
+fn get_downloaded_models(state: State<'_, AppState>) -> Vec<String> {
+    let manager = state.model_manager.lock().unwrap();
+    manager.get_downloaded_models()
+}
+
+#[tauri::command]
+async fn download_model(
+    model_name: String,
+    state: State<'_, AppState>,
+    window: tauri::Window,
+) -> Result<String, String> {
+    let manager = state.model_manager.lock().unwrap();
+    let models = ModelManager::get_available_models();
+    
+    let model = models.iter()
+        .find(|m| m.name == model_name)
+        .ok_or("Model not found")?
+        .clone();
+    
+    drop(manager); // 释放锁
+    
+    // 下载模型，带进度回调
+    let manager = state.model_manager.lock().unwrap();
+    let result = manager.download_model(&model, move |downloaded, total| {
+        let progress = if total > 0 {
+            (downloaded as f64 / total as f64 * 100.0) as u32
+        } else {
+            0
+        };
+        
+        // 发送进度事件到前端
+        let _ = window.emit("download-progress", serde_json::json!({
+            "model": model.name,
+            "downloaded": downloaded,
+            "total": total,
+            "progress": progress,
+        }));
+    }).await;
+    
+    match result {
+        Ok(path) => Ok(format!("Model downloaded to: {:?}", path)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn delete_model(filename: String, state: State<'_, AppState>) -> Result<String, String> {
+    let manager = state.model_manager.lock().unwrap();
+    manager.delete_model(&filename).map_err(|e| e.to_string())?;
+    Ok(format!("Model {} deleted", filename))
+}
+
+#[tauri::command]
+fn load_model(filename: String, state: State<'_, AppState>) -> Result<String, String> {
+    let manager = state.model_manager.lock().unwrap();
+    let model_path = manager.get_model_path(&filename);
+    
+    if !model_path.exists() {
+        return Err(format!("Model file not found: {:?}", model_path));
+    }
+    
+    let mut whisper = state.whisper.lock().unwrap();
+    
+    // 创建或更新 Whisper 引擎
+    if whisper.is_none() {
+        *whisper = Some(WhisperEngine::new());
+    }
+    
+    if let Some(engine) = whisper.as_mut() {
+        engine.load_model(model_path.to_str().unwrap())
+            .map_err(|e| e.to_string())?;
+        Ok(format!("Model {} loaded successfully", filename))
+    } else {
+        Err("Failed to initialize Whisper engine".to_string())
+    }
+}
+
 #[derive(serde::Serialize)]
 struct PhaseInfo {
     phase: String,
@@ -282,6 +369,7 @@ pub fn run() {
     let llm_client = LLMClient::new();
     let tts_engine = TTSEngine::new();
     let atc_db = ATCDatabase::new();
+    let model_manager = ModelManager::new();
     
     // 尝试加载 Little Navmap 数据库
     let little_navmap = match LittleNavmapDB::new() {
@@ -308,6 +396,7 @@ pub fn run() {
             phase_detector: Mutex::new(FlightPhaseDetector::new()),
             atc_database: Mutex::new(atc_db),
             little_navmap: Mutex::new(little_navmap),
+            model_manager: Mutex::new(model_manager),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,
@@ -317,6 +406,11 @@ pub fn run() {
             stop_recording,
             get_atc_response,
             get_current_phase,
+            get_available_models,
+            get_downloaded_models,
+            download_model,
+            delete_model,
+            load_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
