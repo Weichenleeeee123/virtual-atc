@@ -436,6 +436,95 @@ button {
   color: white;
 }
 
-.btn-delete:hover {
-  background: #cc0000;
+/* Loading and Status Indicators */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 255, 0, 0.3);
+  border-top-color: #00ff00;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.connected {
+  background: #4ade80;
+}
+
+.status-indicator.disconnected {
+  background: #ef4444;
+  animation: none;
+}
+
+.status-indicator.processing {
+  background: #fbbf24;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Message animations */
+.message {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.processing {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Button disabled state */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error message styling */
+.message-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.message.atc .message-text {
+  color: #e0e0e0;
+}
+
+.message.atc .message-text:has(❌),
+.message.atc .message-text:has(⚠️) {
+  color: #fbbf24;
+  border-left: 3px solid #ef4444;
+  padding-left: 10px;
+}
+
+.message.atc .message-text:has(✓) {
+  color: #4ade80;
+}
+

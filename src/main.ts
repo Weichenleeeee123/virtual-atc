@@ -44,7 +44,7 @@ let isRecording = false;
 let currentLanguage = "zh";
 
 // Add message to communication panel
-function addMessage(sender: "pilot" | "atc", text: string) {
+function addMessage(sender: "pilot" | "atc", text: string): HTMLElement {
   const messageDiv = document.createElement("div");
   messageDiv.className = `message ${sender}`;
   
@@ -64,38 +64,67 @@ function addMessage(sender: "pilot" | "atc", text: string) {
   
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  
+  return messageDiv;
 }
 
 // Connect to simulator
 connectButton.addEventListener("click", async () => {
+  if (isConnected) {
+    // Disconnect
+    try {
+      await invoke("disconnect_simulator");
+      isConnected = false;
+      connectionStatus.textContent = "未连接";
+      connectionStatus.style.color = "#ef4444";
+      connectButton.textContent = "连接模拟器";
+      addMessage("atc", "已断开连接");
+    } catch (error) {
+      console.error("Failed to disconnect:", error);
+    }
+    return;
+  }
+  
+  // Connect
+  connectButton.disabled = true;
+  connectButton.textContent = "连接中...";
+  
   try {
-    const result = await invoke("connect_simulator");
+    const result = await invoke("connect_simulator", { simType: "xplane" }) as string;
     isConnected = true;
     connectionStatus.textContent = "已连接";
     connectionStatus.style.color = "#4ade80";
     connectButton.textContent = "断开连接";
-    addMessage("atc", "模拟器连接成功");
+    addMessage("atc", result);
   } catch (error) {
     console.error("Failed to connect:", error);
-    addMessage("atc", "连接失败，请确保模拟器正在运行");
+    const errorMsg = error as string;
+    addMessage("atc", errorMsg || "连接失败，请确保模拟器正在运行");
+  } finally {
+    connectButton.disabled = false;
   }
 });
 
 // PTT (Push-to-Talk) button
 pttButton.addEventListener("mousedown", async () => {
   if (!isConnected) {
-    addMessage("atc", "请先连接模拟器");
+    addMessage("atc", "⚠️ 请先连接模拟器");
     return;
   }
   
   isRecording = true;
   pttButton.classList.add("recording");
-  pttButton.querySelector(".ptt-text")!.textContent = "正在录音...";
+  pttButton.querySelector(".ptt-text")!.textContent = "🎙️ 正在录音...";
   
   try {
     await invoke("start_recording");
   } catch (error) {
     console.error("Failed to start recording:", error);
+    const errorMsg = error as string;
+    addMessage("atc", errorMsg || "❌ 录音启动失败");
+    isRecording = false;
+    pttButton.classList.remove("recording");
+    pttButton.querySelector(".ptt-text")!.textContent = "按住通话 (PTT)";
   }
 });
 
@@ -106,9 +135,19 @@ pttButton.addEventListener("mouseup", async () => {
   pttButton.classList.remove("recording");
   pttButton.querySelector(".ptt-text")!.textContent = "按住通话 (PTT)";
   
+  // Show processing indicator
+  const processingMsg = addMessage("atc", "⏳ 正在处理...");
+  
   try {
     const transcript = await invoke("stop_recording") as string;
+    
+    // Remove processing message
+    processingMsg.remove();
+    
     addMessage("pilot", transcript);
+    
+    // Show thinking indicator
+    const thinkingMsg = addMessage("atc", "🤔 AI 思考中...");
     
     // Get ATC response
     const response = await invoke("get_atc_response", { 
@@ -116,12 +155,21 @@ pttButton.addEventListener("mouseup", async () => {
       language: currentLanguage 
     }) as string;
     
-    setTimeout(() => {
-      addMessage("atc", response);
-    }, 500);
+    // Remove thinking message
+    thinkingMsg.remove();
+    
+    addMessage("atc", response);
   } catch (error) {
     console.error("Failed to process recording:", error);
-    addMessage("atc", "语音识别失败，请重试");
+    const errorMsg = error as string;
+    
+    // Remove processing/thinking message
+    const lastMsg = messagesContainer.lastElementChild;
+    if (lastMsg && lastMsg.textContent?.includes("处理中") || lastMsg?.textContent?.includes("思考中")) {
+      lastMsg.remove();
+    }
+    
+    addMessage("atc", errorMsg || "❌ 处理失败，请重试");
   }
 });
 

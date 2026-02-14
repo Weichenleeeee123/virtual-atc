@@ -35,19 +35,38 @@ async fn connect_simulator(sim_type: String, state: State<'_, AppState>) -> Resu
     match sim_type.as_str() {
         "xplane" => {
             let mut sim = state.simulator.lock().unwrap();
-            *sim = Some(SimulatorConnection::new().map_err(|e| e.to_string())?);
-            *current_sim = "xplane".to_string();
-            Ok("Connected to X-Plane".to_string())
+            match SimulatorConnection::new() {
+                Ok(connection) => {
+                    *sim = Some(connection);
+                    *current_sim = "xplane".to_string();
+                    Ok("✓ 已连接到 X-Plane\n正在接收飞行数据...".to_string())
+                }
+                Err(e) => {
+                    Err(format!("❌ 无法连接到 X-Plane\n\n可能的原因：\n• X-Plane 未运行\n• 飞机未加载\n• 防火墙阻止 UDP 端口 49000\n\n详细错误：{}", e))
+                }
+            }
         }
         "msfs" => {
             let mut msfs = state.msfs.lock().unwrap();
-            let mut connection = MSFSConnection::new().map_err(|e| e.to_string())?;
-            connection.connect().map_err(|e| e.to_string())?;
-            *msfs = Some(connection);
-            *current_sim = "msfs".to_string();
-            Ok("Connected to MSFS".to_string())
+            match MSFSConnection::new() {
+                Ok(mut connection) => {
+                    match connection.connect() {
+                        Ok(_) => {
+                            *msfs = Some(connection);
+                            *current_sim = "msfs".to_string();
+                            Ok("✓ 已连接到 MSFS\n正在接收飞行数据...".to_string())
+                        }
+                        Err(e) => {
+                            Err(format!("❌ 无法连接到 MSFS\n\n可能的原因：\n• MSFS 未运行\n• SimConnect 未安装\n• Python 桥接脚本启动失败\n\n详细错误：{}", e))
+                        }
+                    }
+                }
+                Err(e) => {
+                    Err(format!("❌ 初始化 MSFS 连接失败\n\n请确保：\n• 已安装 Python\n• 已安装 SimConnect-Python (pip install SimConnect-Python)\n\n详细错误：{}", e))
+                }
+            }
         }
-        _ => Err("Invalid simulator type. Use 'xplane' or 'msfs'".to_string())
+        _ => Err("❌ 无效的模拟器类型\n\n请使用 'xplane' 或 'msfs'".to_string())
     }
 }
 
@@ -148,18 +167,24 @@ async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightDataRespons
 async fn start_recording(state: State<'_, AppState>) -> Result<(), String> {
     let mut whisper = state.whisper.lock().unwrap();
     if whisper.is_none() {
-        let mut engine = WhisperEngine::new().map_err(|e| e.to_string())?;
+        let mut engine = WhisperEngine::new().map_err(|e| {
+            format!("❌ 初始化 Whisper 引擎失败\n\n详细错误：{}", e)
+        })?;
         
         // 从环境变量读取模型路径
         let model_path = std::env::var("WHISPER_MODEL_PATH")
             .unwrap_or_else(|_| "./models/ggml-medium.bin".to_string());
         
-        engine.load_model(&model_path).map_err(|e| e.to_string())?;
+        engine.load_model(&model_path).map_err(|e| {
+            format!("❌ 无法加载 Whisper 模型\n\n可能的原因：\n• 模型文件不存在：{}\n• 模型文件损坏\n• 权限不足\n\n解决方法：\n1. 点击「模型管理」标签\n2. 下载 medium 模型（推荐）\n3. 或手动下载到 models/ 目录\n\n详细错误：{}", model_path, e)
+        })?;
         *whisper = Some(engine);
     }
     
     if let Some(engine) = &mut *whisper {
-        engine.start_recording().map_err(|e| e.to_string())?;
+        engine.start_recording().map_err(|e| {
+            format!("❌ 无法启动录音\n\n可能的原因：\n• 未检测到麦克风\n• 麦克风被其他程序占用\n• 权限不足（需要麦克风权限）\n\n详细错误：{}", e)
+        })?;
     }
     
     Ok(())
@@ -170,11 +195,25 @@ async fn stop_recording(state: State<'_, AppState>) -> Result<String, String> {
     let mut whisper = state.whisper.lock().unwrap();
     
     if let Some(engine) = &mut *whisper {
-        let audio_data = engine.stop_recording().map_err(|e| e.to_string())?;
-        let transcript = engine.transcribe(&audio_data).map_err(|e| e.to_string())?;
+        let audio_data = engine.stop_recording().map_err(|e| {
+            format!("❌ 停止录音失败\n\n详细错误：{}", e)
+        })?;
+        
+        if audio_data.is_empty() {
+            return Err("⚠️ 未检测到音频输入\n\n请确保：\n• 麦克风已连接\n• 麦克风未静音\n• 说话时按住 PTT 按钮".to_string());
+        }
+        
+        let transcript = engine.transcribe(&audio_data).map_err(|e| {
+            format!("❌ 语音识别失败\n\n可能的原因：\n• 音频质量太差\n• 背景噪音过大\n• 模型不支持该语言\n\n详细错误：{}", e)
+        })?;
+        
+        if transcript.trim().is_empty() {
+            return Err("⚠️ 未识别到语音内容\n\n建议：\n• 在安静环境中使用\n• 说话清晰、语速适中\n• 靠近麦克风".to_string());
+        }
+        
         Ok(transcript)
     } else {
-        Err("Whisper engine not initialized".to_string())
+        Err("❌ Whisper 引擎未初始化\n\n请重启应用或重新加载模型".to_string())
     }
 }
 
