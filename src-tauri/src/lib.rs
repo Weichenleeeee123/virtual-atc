@@ -8,6 +8,7 @@ use modules::whisper::WhisperEngine;
 use modules::llm::LLMClient;
 use modules::tts::TTSEngine;
 use modules::msfs::MSFSConnection;
+use modules::flight_phase::{FlightPhaseDetector, FlightPhase};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -18,6 +19,7 @@ struct AppState {
     llm: Mutex<LLMClient>,
     tts: Mutex<TTSEngine>,
     current_sim: Mutex<String>, // "xplane" or "msfs"
+    phase_detector: Mutex<FlightPhaseDetector>,
 }
 
 #[tauri::command]
@@ -67,26 +69,28 @@ async fn disconnect_simulator(state: State<'_, AppState>) -> Result<String, Stri
 }
 
 #[tauri::command]
-async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightData, String> {
+async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightDataResponse, String> {
     let current_sim = state.current_sim.lock().unwrap();
     
-    match current_sim.as_str() {
+    // 获取飞行数据
+    let (callsign, altitude, speed, heading, vertical_speed, latitude, longitude, on_ground) = match current_sim.as_str() {
         "xplane" => {
             let sim = state.simulator.lock().unwrap();
             match &*sim {
                 Some(connection) => {
                     let data = connection.get_flight_data().map_err(|e| e.to_string())?;
-                    Ok(FlightData {
-                        callsign: data.callsign,
-                        altitude: data.altitude,
-                        speed: data.speed,
-                        heading: data.heading,
-                        vertical_speed: data.vertical_speed,
-                        latitude: data.latitude,
-                        longitude: data.longitude,
-                    })
+                    (
+                        data.callsign,
+                        data.altitude,
+                        data.speed,
+                        data.heading,
+                        data.vertical_speed,
+                        data.latitude,
+                        data.longitude,
+                        data.altitude < 10.0 && data.vertical_speed.abs() < 100.0,
+                    )
                 }
-                None => Err("Not connected to X-Plane".to_string()),
+                None => return Err("Not connected to X-Plane".to_string()),
             }
         }
         "msfs" => {
@@ -94,21 +98,44 @@ async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightData, Strin
             match &*msfs {
                 Some(connection) => {
                     let data = connection.get_flight_data().map_err(|e| e.to_string())?;
-                    Ok(FlightData {
-                        callsign: data.callsign,
-                        altitude: data.altitude,
-                        speed: data.speed,
-                        heading: data.heading,
-                        vertical_speed: data.vertical_speed,
-                        latitude: data.latitude,
-                        longitude: data.longitude,
-                    })
+                    (
+                        data.callsign,
+                        data.altitude,
+                        data.speed,
+                        data.heading,
+                        data.vertical_speed,
+                        data.latitude,
+                        data.longitude,
+                        data.on_ground,
+                    )
                 }
-                None => Err("Not connected to MSFS".to_string()),
+                None => return Err("Not connected to MSFS".to_string()),
             }
         }
-        _ => Err("No simulator connected".to_string())
-    }
+        _ => return Err("No simulator connected".to_string())
+    };
+    
+    // 更新飞行阶段
+    let mut detector = state.phase_detector.lock().unwrap();
+    let phase = detector.update(&modules::flight_phase::FlightData {
+        altitude,
+        speed,
+        heading,
+        vertical_speed,
+        on_ground,
+    });
+    
+    Ok(FlightDataResponse {
+        callsign,
+        altitude,
+        speed,
+        heading,
+        vertical_speed,
+        latitude,
+        longitude,
+        phase: phase.as_str().to_string(),
+        phase_display: phase.display_name().to_string(),
+    })
 }
 
 #[tauri::command]
@@ -153,14 +180,43 @@ async fn get_atc_response(
 ) -> Result<String, String> {
     let llm = state.llm.lock().unwrap();
     
-    // Get current flight data for context
-    let sim = state.simulator.lock().unwrap();
-    let flight_data = match &*sim {
-        Some(connection) => connection.get_flight_data().ok(),
-        None => None,
+    // 获取当前飞行数据
+    let current_sim = state.current_sim.lock().unwrap();
+    let flight_data = match current_sim.as_str() {
+        "xplane" => {
+            let sim = state.simulator.lock().unwrap();
+            sim.as_ref().and_then(|c| c.get_flight_data().ok())
+        }
+        "msfs" => {
+            let msfs = state.msfs.lock().unwrap();
+            msfs.as_ref().and_then(|c| c.get_flight_data().ok()).map(|data| {
+                modules::simulator::FlightData {
+                    callsign: data.callsign,
+                    altitude: data.altitude,
+                    speed: data.speed,
+                    heading: data.heading,
+                    vertical_speed: data.vertical_speed,
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                }
+            })
+        }
+        _ => None,
     };
     
-    let response = llm.get_atc_response(&message, &language, flight_data)
+    // 获取飞行阶段上下文
+    let detector = state.phase_detector.lock().unwrap();
+    let phase_context = detector.get_atc_context(&language);
+    
+    // 构建完整的上下文
+    let full_context = format!(
+        "当前飞行阶段：{}\n\n{}\n\n飞行员消息：{}",
+        detector.get_current_phase().display_name(),
+        phase_context,
+        message
+    );
+    
+    let response = llm.get_atc_response(&full_context, &language, flight_data)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -168,14 +224,33 @@ async fn get_atc_response(
     let tts = state.tts.lock().unwrap();
     if let Err(e) = tts.speak(&response, &language).await {
         eprintln!("TTS error: {}", e);
-        // TTS 失败不影响返回结果
     }
     
     Ok(response)
 }
 
+#[tauri::command]
+async fn get_current_phase(state: State<'_, AppState>) -> Result<PhaseInfo, String> {
+    let detector = state.phase_detector.lock().unwrap();
+    let phase = detector.get_current_phase();
+    let duration = detector.get_phase_duration();
+    
+    Ok(PhaseInfo {
+        phase: phase.as_str().to_string(),
+        display_name: phase.display_name().to_string(),
+        duration_seconds: duration.as_secs(),
+    })
+}
+
 #[derive(serde::Serialize)]
-struct FlightData {
+struct PhaseInfo {
+    phase: String,
+    display_name: String,
+    duration_seconds: u64,
+}
+
+#[derive(serde::Serialize)]
+struct FlightDataResponse {
     callsign: String,
     altitude: f64,
     speed: f64,
@@ -183,6 +258,8 @@ struct FlightData {
     vertical_speed: f64,
     latitude: f64,
     longitude: f64,
+    phase: String,
+    phase_display: String,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -199,6 +276,7 @@ pub fn run() {
             llm: Mutex::new(llm_client),
             tts: Mutex::new(tts_engine),
             current_sim: Mutex::new(String::new()),
+            phase_detector: Mutex::new(FlightPhaseDetector::new()),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,
@@ -207,6 +285,7 @@ pub fn run() {
             start_recording,
             stop_recording,
             get_atc_response,
+            get_current_phase,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

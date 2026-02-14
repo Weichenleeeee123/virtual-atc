@@ -2,9 +2,10 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use serde::{Deserialize, Serialize};
 
 // SimConnect 数据结构
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MSFSData {
     pub callsign: String,
     pub altitude: f64,      // 英尺
