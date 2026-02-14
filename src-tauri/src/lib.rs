@@ -102,6 +102,9 @@ struct FlightData {
     altitude: f64,
     speed: f64,
     heading: f64,
+    vertical_speed: f64,
+    latitude: f64,
+    longitude: f64,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
