@@ -82,9 +82,9 @@ impl ATCDatabase {
         }
     }
     
-    /// 加载默认机场数据（包含滑行道信息）
+    /// 加载默认机场数据
     fn load_default_airports(&mut self) {
-        // 北京首都国际机场 (ZBAA) - 完整滑行道数据
+        // 北京首都国际机场 (ZBAA)
         self.airports.insert("ZBAA".to_string(), Airport {
             icao: "ZBAA".to_string(),
             name: "北京首都国际机场".to_string(),
@@ -115,43 +115,6 @@ impl ATCDatabase {
                     width: 60,
                 },
             ],
-            taxiways: vec![
-                Taxiway { name: "A".to_string(), taxiway_type: TaxiwayType::Main, connects_to: vec!["A1".to_string(), "A2".to_string(), "A3".to_string()] },
-                Taxiway { name: "B".to_string(), taxiway_type: TaxiwayType::Main, connects_to: vec!["B1".to_string(), "B2".to_string(), "B3".to_string()] },
-                Taxiway { name: "C".to_string(), taxiway_type: TaxiwayType::Main, connects_to: vec!["C1".to_string(), "C2".to_string(), "C3".to_string()] },
-                Taxiway { name: "R1".to_string(), taxiway_type: TaxiwayType::Rapid, connects_to: vec!["A".to_string()] },
-                Taxiway { name: "R2".to_string(), taxiway_type: TaxiwayType::Rapid, connects_to: vec!["A".to_string()] },
-                Taxiway { name: "R5".to_string(), taxiway_type: TaxiwayType::Rapid, connects_to: vec!["B".to_string()] },
-            ],
-            gates: vec![
-                Gate { number: "A01".to_string(), terminal: "T3".to_string(), aircraft_type: "Heavy".to_string(), taxiway_access: vec!["A3".to_string()] },
-                Gate { number: "B12".to_string(), terminal: "T2".to_string(), aircraft_type: "Medium".to_string(), taxiway_access: vec!["B2".to_string()] },
-                Gate { number: "C05".to_string(), terminal: "T1".to_string(), aircraft_type: "Medium".to_string(), taxiway_access: vec!["C1".to_string()] },
-            ],
-            taxi_routes: vec![
-                TaxiRoute {
-                    from: "T3-A01".to_string(),
-                    to: "RWY01".to_string(),
-                    route: vec!["A3".to_string(), "A".to_string()],
-                    distance: 2500,
-                    hotspots: vec!["HS1".to_string()],
-                },
-                TaxiRoute {
-                    from: "RWY36R".to_string(),
-                    to: "T2-B12".to_string(),
-                    route: vec!["R5".to_string(), "B".to_string(), "B2".to_string()],
-                    distance: 1800,
-                    hotspots: vec![],
-                },
-            ],
-            hotspots: vec![
-                Hotspot {
-                    id: "HS1".to_string(),
-                    location: "A与B交叉点".to_string(),
-                    description: "主滑行道交叉点，交通繁忙".to_string(),
-                    warning: "注意交叉交通".to_string(),
-                },
-            ],
             frequencies: Frequencies {
                 tower: vec![118.5, 118.7],
                 ground: vec![121.6, 121.75],
@@ -159,11 +122,19 @@ impl ATCDatabase {
                 approach: vec![119.7, 124.5],
                 atis: vec![127.6],
             },
-            sids: vec!["BOBAK1A".to_string(), "LADOL1B".to_string()],
-            stars: vec!["AKOMA1A".to_string(), "BAXIX1B".to_string()],
+            sids: vec![
+                "BOBAK1A".to_string(),
+                "LADOL1B".to_string(),
+                "LANDA1C".to_string(),
+            ],
+            stars: vec![
+                "AKOMA1A".to_string(),
+                "BAXIX1B".to_string(),
+                "DUMET1C".to_string(),
+            ],
         });
         
-        // 其他机场暂时使用空滑行道数据
+        // 上海浦东国际机场 (ZSPD)
         self.airports.insert("ZSPD".to_string(), Airport {
             icao: "ZSPD".to_string(),
             name: "上海浦东国际机场".to_string(),
@@ -172,21 +143,127 @@ impl ATCDatabase {
             longitude: 121.8052,
             elevation: 13,
             runways: vec![
-                Runway { name: "16L/34R".to_string(), heading_1: 160, heading_2: 340, length: 4000, width: 60 },
+                Runway {
+                    name: "16L/34R".to_string(),
+                    heading_1: 160,
+                    heading_2: 340,
+                    length: 4000,
+                    width: 60,
+                },
+                Runway {
+                    name: "16R/34L".to_string(),
+                    heading_1: 160,
+                    heading_2: 340,
+                    length: 3400,
+                    width: 60,
+                },
+                Runway {
+                    name: "17L/35R".to_string(),
+                    heading_1: 170,
+                    heading_2: 350,
+                    length: 3800,
+                    width: 60,
+                },
             ],
-            taxiways: vec![],
-            gates: vec![],
-            taxi_routes: vec![],
-            hotspots: vec![],
             frequencies: Frequencies {
-                tower: vec![118.8],
-                ground: vec![121.65],
-                departure: vec![120.4],
-                approach: vec![119.1],
-                atis: vec![127.75],
+                tower: vec![118.8, 124.45],
+                ground: vec![121.65, 121.95],
+                departure: vec![120.85, 125.65],
+                approach: vec![119.4, 120.4],
+                atis: vec![127.65],
             },
-            sids: vec!["AKAGI1A".to_string()],
-            stars: vec!["IDUMA1B".to_string()],
+            sids: vec![
+                "AKOMA1A".to_string(),
+                "PIKAS1B".to_string(),
+                "SASAN1C".to_string(),
+            ],
+            stars: vec![
+                "DUMET1A".to_string(),
+                "ELATO1B".to_string(),
+                "PIKAS1C".to_string(),
+            ],
+        });
+        
+        // 广州白云国际机场 (ZGGG)
+        self.airports.insert("ZGGG".to_string(), Airport {
+            icao: "ZGGG".to_string(),
+            name: "广州白云国际机场".to_string(),
+            name_en: "Guangzhou Baiyun International Airport".to_string(),
+            latitude: 23.3924,
+            longitude: 113.2988,
+            elevation: 50,
+            runways: vec![
+                Runway {
+                    name: "02L/20R".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3800,
+                    width: 60,
+                },
+                Runway {
+                    name: "02R/20L".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.2, 118.95],
+                ground: vec![121.6, 121.85],
+                departure: vec![119.0, 125.4],
+                approach: vec![119.85, 120.6],
+                atis: vec![127.4],
+            },
+            sids: vec![
+                "AKAGI1A".to_string(),
+                "BEKOL1B".to_string(),
+            ],
+            stars: vec![
+                "AKAGI1A".to_string(),
+                "IDUMA1B".to_string(),
+            ],
+        });
+        
+        // 成都双流国际机场 (ZUUU)
+        self.airports.insert("ZUUU".to_string(), Airport {
+            icao: "ZUUU".to_string(),
+            name: "成都双流国际机场".to_string(),
+            name_en: "Chengdu Shuangliu International Airport".to_string(),
+            latitude: 30.5785,
+            longitude: 103.9468,
+            elevation: 1625,
+            runways: vec![
+                Runway {
+                    name: "02L/20R".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+                Runway {
+                    name: "02R/20L".to_string(),
+                    heading_1: 20,
+                    heading_2: 200,
+                    length: 3600,
+                    width: 45,
+                },
+            ],
+            frequencies: Frequencies {
+                tower: vec![118.3, 118.65],
+                ground: vec![121.7, 121.85],
+                departure: vec![119.25, 125.1],
+                approach: vec![119.1, 120.3],
+                atis: vec![127.5],
+            },
+            sids: vec![
+                "AKUMA1A".to_string(),
+                "BEKOL1B".to_string(),
+            ],
+            stars: vec![
+                "AKUMA1A".to_string(),
+                "IDUMA1B".to_string(),
+            ],
         });
     }
 }
@@ -199,15 +276,15 @@ pub struct Airport {
     pub name_en: String,
     pub latitude: f64,
     pub longitude: f64,
-    pub elevation: i32,
+    pub elevation: i32,  // 海拔（米）
     pub runways: Vec<Runway>,
     pub taxiways: Vec<Taxiway>,
     pub gates: Vec<Gate>,
     pub taxi_routes: Vec<TaxiRoute>,
     pub hotspots: Vec<Hotspot>,
     pub frequencies: Frequencies,
-    pub sids: Vec<String>,
-    pub stars: Vec<String>,
+    pub sids: Vec<String>,  // 标准离场程序
+    pub stars: Vec<String>, // 标准进场程序
 }
 
 impl Airport {
@@ -255,18 +332,6 @@ impl Airport {
 **跑道信息：**
 {}
 
-**滑行道系统：**
-{}
-
-**停机位：**
-{}
-
-**常用滑行路线：**
-{}
-
-**热点区域（需特别注意）：**
-{}
-
 **通信频率：**
 - 塔台：{} MHz
 - 地面：{} MHz
@@ -281,17 +346,17 @@ impl Airport {
 {}
 
 **重要提示：**
-- 必须使用正确的跑道编号
-- 滑行指令必须包含完整的滑行道序列
-- 遇到热点区域必须提醒飞行员注意
-- 必须在适当时机提供频率切换
+- 必须在指令中使用正确的跑道号
+- 必须在适当时机给出频率切换指令
+- 离场后切换到离场频率，进近时切换到进近频率
 "#,
-                self.name, self.icao, self.icao, self.elevation, self.latitude, self.longitude,
+                self.name,
+                self.icao,
+                self.icao,
+                self.elevation,
+                self.latitude,
+                self.longitude,
                 self.format_runways(language),
-                self.format_taxiways(language),
-                self.format_gates(language),
-                self.format_taxi_routes(language),
-                self.format_hotspots(language),
                 self.frequencies.format_list(&self.frequencies.tower),
                 self.frequencies.format_list(&self.frequencies.ground),
                 self.frequencies.format_list(&self.frequencies.departure),
@@ -306,22 +371,10 @@ impl Airport {
 
 **Basic Info:**
 - ICAO Code: {}
-- Elevation: {} m
+- Elevation: {} meters
 - Coordinates: {:.4}°N, {:.4}°E
 
 **Runways:**
-{}
-
-**Taxiway System:**
-{}
-
-**Gates:**
-{}
-
-**Common Taxi Routes:**
-{}
-
-**Hotspots (Caution Required):**
 {}
 
 **Frequencies:**
@@ -331,24 +384,24 @@ impl Airport {
 - Approach: {} MHz
 - ATIS: {} MHz
 
-**SID:**
+**SID (Standard Instrument Departure):**
 {}
 
-**STAR:**
+**STAR (Standard Terminal Arrival Route):**
 {}
 
 **Important Notes:**
-- MUST use correct runway number
-- Taxi instructions MUST include complete taxiway sequence
-- MUST warn pilots about hotspot areas
+- MUST use correct runway number in instructions
 - MUST provide frequency change at appropriate time
+- Switch to departure after takeoff, approach before landing
 "#,
-                self.name_en, self.icao, self.icao, self.elevation, self.latitude, self.longitude,
+                self.name_en,
+                self.icao,
+                self.icao,
+                self.elevation,
+                self.latitude,
+                self.longitude,
                 self.format_runways(language),
-                self.format_taxiways(language),
-                self.format_gates(language),
-                self.format_taxi_routes(language),
-                self.format_hotspots(language),
                 self.frequencies.format_list(&self.frequencies.tower),
                 self.frequencies.format_list(&self.frequencies.ground),
                 self.frequencies.format_list(&self.frequencies.departure),
@@ -369,71 +422,6 @@ impl Airport {
             }
         }).collect::<Vec<_>>().join("\n")
     }
-    
-    fn format_taxiways(&self, language: &str) -> String {
-        if self.taxiways.is_empty() {
-            return if language == "zh" { "（暂无数据）".to_string() } else { "(No data)".to_string() };
-        }
-        
-        self.taxiways.iter().map(|t| {
-            let type_str = match t.taxiway_type {
-                TaxiwayType::Main => if language == "zh" { "主滑行道" } else { "Main" },
-                TaxiwayType::Parallel => if language == "zh" { "平行滑行道" } else { "Parallel" },
-                TaxiwayType::Rapid => if language == "zh" { "快速脱离道" } else { "Rapid Exit" },
-                TaxiwayType::Apron => if language == "zh" { "停机坪" } else { "Apron" },
-            };
-            
-            if language == "zh" {
-                format!("- 滑行道 {}（{}）→ 连接：{}", t.name, type_str, t.connects_to.join("、"))
-            } else {
-                format!("- Taxiway {} ({}) → Connects: {}", t.name, type_str, t.connects_to.join(", "))
-            }
-        }).collect::<Vec<_>>().join("\n")
-    }
-    
-    fn format_gates(&self, language: &str) -> String {
-        if self.gates.is_empty() {
-            return if language == "zh" { "（暂无数据）".to_string() } else { "(No data)".to_string() };
-        }
-        
-        self.gates.iter().take(10).map(|g| {
-            if language == "zh" {
-                format!("- {} 停机位 {}（{}）", g.terminal, g.number, g.aircraft_type)
-            } else {
-                format!("- Terminal {} Gate {} ({})", g.terminal, g.number, g.aircraft_type)
-            }
-        }).collect::<Vec<_>>().join("\n")
-    }
-    
-    fn format_taxi_routes(&self, language: &str) -> String {
-        if self.taxi_routes.is_empty() {
-            return if language == "zh" { "（暂无数据）".to_string() } else { "(No data)".to_string() };
-        }
-        
-        self.taxi_routes.iter().map(|r| {
-            if language == "zh" {
-                format!("- {} → {}：经 {}（约 {} 米）", 
-                    r.from, r.to, r.route.join("、"), r.distance)
-            } else {
-                format!("- {} → {}: via {} (approx {} m)", 
-                    r.from, r.to, r.route.join(", "), r.distance)
-            }
-        }).collect::<Vec<_>>().join("\n")
-    }
-    
-    fn format_hotspots(&self, language: &str) -> String {
-        if self.hotspots.is_empty() {
-            return if language == "zh" { "（无）".to_string() } else { "(None)".to_string() };
-        }
-        
-        self.hotspots.iter().map(|h| {
-            if language == "zh" {
-                format!("- {} ({}): {}", h.id, h.location, h.warning)
-            } else {
-                format!("- {} ({}): {}", h.id, h.location, h.warning)
-            }
-        }).collect::<Vec<_>>().join("\n")
-    }
 }
 
 /// 跑道信息
@@ -442,46 +430,46 @@ pub struct Runway {
     pub name: String,
     pub heading_1: u16,
     pub heading_2: u16,
-    pub length: u32,
-    pub width: u32,
+    pub length: u32,  // 米
+    pub width: u32,   // 米
 }
 
 /// 滑行道信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Taxiway {
-    pub name: String,
+    pub name: String,           // 滑行道名称（如 A, B, C, A1, A2）
     pub taxiway_type: TaxiwayType,
-    pub connects_to: Vec<String>,
+    pub connects_to: Vec<String>, // 连接的其他滑行道
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaxiwayType {
-    Main,
-    Parallel,
-    Rapid,
-    Apron,
+    Main,      // 主滑行道
+    Parallel,  // 平行滑行道
+    Rapid,     // 快速脱离道
+    Apron,     // 停机坪滑行道
 }
 
 /// 停机位信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Gate {
-    pub number: String,
-    pub terminal: String,
-    pub aircraft_type: String,
-    pub taxiway_access: Vec<String>,
+    pub number: String,         // 停机位号（如 A01, B12）
+    pub terminal: String,       // 航站楼
+    pub aircraft_type: String,  // 适用机型（如 Heavy, Medium, Light）
+    pub taxiway_access: Vec<String>, // 可达滑行道
 }
 
 /// 滑行路线
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaxiRoute {
-    pub from: String,
-    pub to: String,
-    pub route: Vec<String>,
-    pub distance: u32,
-    pub hotspots: Vec<String>,
+    pub from: String,           // 起点（跑道或停机位）
+    pub to: String,             // 终点（跑道或停机位）
+    pub route: Vec<String>,     // 滑行道序列
+    pub distance: u32,          // 距离（米）
+    pub hotspots: Vec<String>,  // 热点区域（需要特别注意的地方）
 }
 
-/// 热点区域
+/// 热点区域（容易发生冲突的地方）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hotspot {
     pub id: String,
@@ -493,11 +481,11 @@ pub struct Hotspot {
 /// 通信频率
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Frequencies {
-    pub tower: Vec<f32>,
-    pub ground: Vec<f32>,
-    pub departure: Vec<f32>,
-    pub approach: Vec<f32>,
-    pub atis: Vec<f32>,
+    pub tower: Vec<f32>,      // 塔台
+    pub ground: Vec<f32>,     // 地面
+    pub departure: Vec<f32>,  // 离场
+    pub approach: Vec<f32>,   // 进近
+    pub atis: Vec<f32>,       // 自动终端情报服务
 }
 
 impl Frequencies {
