@@ -1,13 +1,16 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+use std::path::Path;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Stream, StreamConfig};
+use whisper_rs::{WhisperContext, WhisperContextParameters, FullParams, SamplingStrategy};
 
 pub struct WhisperEngine {
     is_recording: bool,
     samples: Arc<Mutex<Vec<f32>>>,
     stream: Option<Stream>,
     sample_rate: u32,
+    ctx: Option<WhisperContext>,
 }
 
 impl WhisperEngine {
@@ -17,7 +20,23 @@ impl WhisperEngine {
             samples: Arc::new(Mutex::new(Vec::new())),
             stream: None,
             sample_rate: 16000, // Whisper 需要 16kHz
+            ctx: None,
         })
+    }
+    
+    pub fn load_model(&mut self, model_path: &str) -> Result<(), Box<dyn Error>> {
+        if !Path::new(model_path).exists() {
+            return Err(format!("Model file not found: {}", model_path).into());
+        }
+        
+        let ctx = WhisperContext::new_with_params(
+            model_path,
+            WhisperContextParameters::default(),
+        )?;
+        
+        self.ctx = Some(ctx);
+        println!("Whisper model loaded: {}", model_path);
+        Ok(())
     }
     
     pub fn start_recording(&mut self) -> Result<(), Box<dyn Error>> {
@@ -107,31 +126,38 @@ impl WhisperEngine {
     }
     
     pub fn transcribe(&self, audio_data: &[f32]) -> Result<String, Box<dyn Error>> {
-        // TODO: 集成 whisper.cpp
-        // 目前返回模拟数据
-        
         if audio_data.is_empty() {
             return Ok(String::new());
         }
         
-        // 模拟转录结果
-        let duration = audio_data.len() as f32 / 16000.0;
+        let ctx = self.ctx.as_ref()
+            .ok_or("Whisper model not loaded. Call load_model() first.")?;
         
-        if duration < 0.5 {
-            return Ok(String::new());
+        // 创建转录参数
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        
+        // 设置语言为中文（如果需要自动检测，可以不设置）
+        params.set_language(Some("zh"));
+        params.set_translate(false);
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+        
+        // 执行转录
+        let mut state = ctx.create_state()?;
+        state.full(params, audio_data)?;
+        
+        // 获取转录结果
+        let num_segments = state.full_n_segments()?;
+        let mut result = String::new();
+        
+        for i in 0..num_segments {
+            let segment = state.full_get_segment_text(i)?;
+            result.push_str(&segment);
         }
         
-        // 根据音频长度返回不同的模拟文本
-        let mock_transcripts = vec![
-            "北京塔台，国航123，请求起飞",
-            "上海进近，东航456，请求下降",
-            "广州塔台，南航789，跑道外，请求落地",
-            "成都进近，川航321，高度8000米，请求进近",
-            "深圳塔台，深航654，停机位A12，请求开车",
-        ];
-        
-        let index = (duration * 10.0) as usize % mock_transcripts.len();
-        Ok(mock_transcripts[index].to_string())
+        Ok(result.trim().to_string())
     }
     
     fn resample(&self, audio: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {

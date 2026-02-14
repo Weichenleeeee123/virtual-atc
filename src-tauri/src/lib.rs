@@ -35,7 +35,14 @@ async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightData, Strin
 async fn start_recording(state: State<'_, AppState>) -> Result<(), String> {
     let mut whisper = state.whisper.lock().unwrap();
     if whisper.is_none() {
-        *whisper = Some(WhisperEngine::new().map_err(|e| e.to_string())?);
+        let mut engine = WhisperEngine::new().map_err(|e| e.to_string())?;
+        
+        // 从环境变量读取模型路径
+        let model_path = std::env::var("WHISPER_MODEL_PATH")
+            .unwrap_or_else(|_| "./models/ggml-medium.bin".to_string());
+        
+        engine.load_model(&model_path).map_err(|e| e.to_string())?;
+        *whisper = Some(engine);
     }
     
     if let Some(engine) = &mut *whisper {
