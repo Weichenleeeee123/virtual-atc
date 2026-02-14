@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Virtual ATC</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="container">
+        <h1>🎙️ Virtual ATC</h1>
+        
+        <div class="status-panel">
+          <div class="status-item">
+            <span class="label">连接状态:</span>
+            <span id="connection-status" class="value">未连接</span>
+          </div>
+          <div class="status-item">
+            <span class="label">当前频率:</span>
+            <span id="frequency" class="value">118.100</span>
+          </div>
+          <div class="status-item">
+            <span class="label">语言模式:</span>
+            <select id="language-select">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flight-info">
+          <h2>飞行信息</h2>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="label">呼号:</span>
+              <span id="callsign" class="value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">高度:</span>
+              <span id="altitude" class="value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">速度:</span>
+              <span id="speed" class="value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="label">航向:</span>
+              <span id="heading" class="value">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="communication-panel">
+          <h2>通话记录</h2>
+          <div id="messages" class="messages"></div>
+        </div>
+
+        <div class="controls">
+          <button id="ptt-button" class="ptt-button">
+            <span class="ptt-icon">🎙️</span>
+            <span class="ptt-text">按住通话 (PTT)</span>
+          </button>
+          <button id="connect-button" class="connect-button">连接模拟器</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
