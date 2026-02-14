@@ -7,29 +7,107 @@ use modules::simulator::SimulatorConnection;
 use modules::whisper::WhisperEngine;
 use modules::llm::LLMClient;
 use modules::tts::TTSEngine;
+use modules::msfs::MSFSConnection;
 use std::sync::Mutex;
 use tauri::State;
 
 struct AppState {
     simulator: Mutex<Option<SimulatorConnection>>,
+    msfs: Mutex<Option<MSFSConnection>>,
     whisper: Mutex<Option<WhisperEngine>>,
     llm: Mutex<LLMClient>,
     tts: Mutex<TTSEngine>,
+    current_sim: Mutex<String>, // "xplane" or "msfs"
 }
 
 #[tauri::command]
-async fn connect_simulator(state: State<'_, AppState>) -> Result<String, String> {
-    let mut sim = state.simulator.lock().unwrap();
-    *sim = Some(SimulatorConnection::new().map_err(|e| e.to_string())?);
-    Ok("Connected".to_string())
+async fn connect_simulator(sim_type: String, state: State<'_, AppState>) -> Result<String, String> {
+    let mut current_sim = state.current_sim.lock().unwrap();
+    
+    match sim_type.as_str() {
+        "xplane" => {
+            let mut sim = state.simulator.lock().unwrap();
+            *sim = Some(SimulatorConnection::new().map_err(|e| e.to_string())?);
+            *current_sim = "xplane".to_string();
+            Ok("Connected to X-Plane".to_string())
+        }
+        "msfs" => {
+            let mut msfs = state.msfs.lock().unwrap();
+            let mut connection = MSFSConnection::new().map_err(|e| e.to_string())?;
+            connection.connect().map_err(|e| e.to_string())?;
+            *msfs = Some(connection);
+            *current_sim = "msfs".to_string();
+            Ok("Connected to MSFS".to_string())
+        }
+        _ => Err("Invalid simulator type. Use 'xplane' or 'msfs'".to_string())
+    }
+}
+
+#[tauri::command]
+async fn disconnect_simulator(state: State<'_, AppState>) -> Result<String, String> {
+    let mut current_sim = state.current_sim.lock().unwrap();
+    
+    match current_sim.as_str() {
+        "xplane" => {
+            let mut sim = state.simulator.lock().unwrap();
+            *sim = None;
+        }
+        "msfs" => {
+            let mut msfs = state.msfs.lock().unwrap();
+            if let Some(connection) = msfs.as_mut() {
+                connection.disconnect();
+            }
+            *msfs = None;
+        }
+        _ => {}
+    }
+    
+    *current_sim = String::new();
+    Ok("Disconnected".to_string())
 }
 
 #[tauri::command]
 async fn get_flight_data(state: State<'_, AppState>) -> Result<FlightData, String> {
-    let sim = state.simulator.lock().unwrap();
-    match &*sim {
-        Some(connection) => connection.get_flight_data().map_err(|e| e.to_string()),
-        None => Err("Not connected".to_string()),
+    let current_sim = state.current_sim.lock().unwrap();
+    
+    match current_sim.as_str() {
+        "xplane" => {
+            let sim = state.simulator.lock().unwrap();
+            match &*sim {
+                Some(connection) => {
+                    let data = connection.get_flight_data().map_err(|e| e.to_string())?;
+                    Ok(FlightData {
+                        callsign: data.callsign,
+                        altitude: data.altitude,
+                        speed: data.speed,
+                        heading: data.heading,
+                        vertical_speed: data.vertical_speed,
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                    })
+                }
+                None => Err("Not connected to X-Plane".to_string()),
+            }
+        }
+        "msfs" => {
+            let msfs = state.msfs.lock().unwrap();
+            match &*msfs {
+                Some(connection) => {
+                    let data = connection.get_flight_data().map_err(|e| e.to_string())?;
+                    Ok(FlightData {
+                        callsign: data.callsign,
+                        altitude: data.altitude,
+                        speed: data.speed,
+                        heading: data.heading,
+                        vertical_speed: data.vertical_speed,
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                    })
+                }
+                None => Err("Not connected to MSFS".to_string()),
+            }
+        }
+        _ => Err("No simulator connected".to_string())
     }
 }
 
@@ -116,12 +194,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState {
             simulator: Mutex::new(None),
+            msfs: Mutex::new(None),
             whisper: Mutex::new(None),
             llm: Mutex::new(llm_client),
             tts: Mutex::new(tts_engine),
+            current_sim: Mutex::new(String::new()),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,
+            disconnect_simulator,
             get_flight_data,
             start_recording,
             stop_recording,
