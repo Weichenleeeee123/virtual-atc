@@ -6,6 +6,7 @@
 
 - 🎙️ **本地语音识别**：使用 Whisper.cpp (medium 模型)
 - 🤖 **AI 空管对话**：基于 SiliconFlow API
+- 🔊 **TTS 语音播放**：ATC 回复自动播放语音
 - ✈️ **飞行模拟器集成**：支持 X-Plane 和 MSFS (SimConnect)
 - 📻 **频率切换**：模拟真实 ATC 频率管理
 - 🌏 **中英文模式**：可选中文或英文 ATC 用语

@@ -6,6 +6,7 @@ mod modules;
 use modules::simulator::SimulatorConnection;
 use modules::whisper::WhisperEngine;
 use modules::llm::LLMClient;
+use modules::tts::TTSEngine;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -13,6 +14,7 @@ struct AppState {
     simulator: Mutex<Option<SimulatorConnection>>,
     whisper: Mutex<Option<WhisperEngine>>,
     llm: Mutex<LLMClient>,
+    tts: Mutex<TTSEngine>,
 }
 
 #[tauri::command]
@@ -80,9 +82,18 @@ async fn get_atc_response(
         None => None,
     };
     
-    llm.get_atc_response(&message, &language, flight_data)
+    let response = llm.get_atc_response(&message, &language, flight_data)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    
+    // 播放 TTS 语音
+    let tts = state.tts.lock().unwrap();
+    if let Err(e) = tts.speak(&response, &language).await {
+        eprintln!("TTS error: {}", e);
+        // TTS 失败不影响返回结果
+    }
+    
+    Ok(response)
 }
 
 #[derive(serde::Serialize)]
@@ -96,6 +107,7 @@ struct FlightData {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let llm_client = LLMClient::new();
+    let tts_engine = TTSEngine::new();
     
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -103,6 +115,7 @@ pub fn run() {
             simulator: Mutex::new(None),
             whisper: Mutex::new(None),
             llm: Mutex::new(llm_client),
+            tts: Mutex::new(tts_engine),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,

@@ -27,4 +27,5 @@ tokio = { version = "1", features = ["full"] }
 cpal = "0.15"
 hound = "3.5"
 whisper-rs = "0.12"
+rodio = "0.17"
 
