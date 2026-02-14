@@ -1,4 +1,5 @@
 import "./style.css";
+import { renderModelManager } from "./modelManager";
 
 const { invoke } = window.__TAURI__.tauri;
 
@@ -13,6 +14,29 @@ const heading = document.getElementById("heading")!;
 const messagesContainer = document.getElementById("messages")!;
 const pttButton = document.getElementById("ptt-button")!;
 const connectButton = document.getElementById("connect-button")!;
+
+// Tab switching
+const tabButtons = document.querySelectorAll(".tab-button");
+const tabContents = document.querySelectorAll(".tab-content");
+
+tabButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    const tabName = button.getAttribute("data-tab");
+    
+    // Update active tab button
+    tabButtons.forEach(btn => btn.classList.remove("active"));
+    button.classList.add("active");
+    
+    // Update active tab content
+    tabContents.forEach(content => content.classList.remove("active"));
+    document.getElementById(`${tabName}-tab`)?.classList.add("active");
+    
+    // Initialize model manager when switching to models tab
+    if (tabName === "models") {
+      renderModelManager();
+    }
+  });
+});
 
 // State
 let isConnected = false;
