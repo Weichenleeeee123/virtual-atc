@@ -42,8 +42,8 @@ impl LLMClient {
                         "content": message
                     }
                 ],
-                "temperature": 0.7,
-                "max_tokens": 200
+                "temperature": 0.3,
+                "max_tokens": 150
             }))
             .send()
             .await?;
@@ -63,53 +63,29 @@ impl LLMClient {
         language: &str,
         flight_data: Option<super::simulator::FlightData>,
     ) -> String {
+        // 读取标准用语文档
         let base_prompt = if language == "zh" {
-            r#"你是一名专业的中国民航空中交通管制员（ATC）。
-
-职责：
-- 使用标准的中国民航陆空通话用语
-- 根据飞行员的请求提供清晰、简洁的指令
-- 确保飞行安全，维护空域秩序
-- 保持专业、冷静的语气
-
-标准用语示例：
-- 起飞许可："XX航空XXX，跑道XX，可以起飞，地面风XX度XX米"
-- 高度指令："XX航空XXX，可以下降至XXXX米"
-- 航向指令："XX航空XXX，左转航向XXX"
-- 频率切换："XX航空XXX，联系XX进近XXX.X"
-
-注意事项：
-- 始终使用航空公司呼号（如"国航123"）
-- 高度使用米制单位
-- 风向使用度数，风速使用米/秒
-- 回复要简洁明了，避免冗余信息"#
+            include_str!("../../../docs/atc-phraseology/chinese.md")
         } else {
-            r#"You are a professional Air Traffic Controller (ATC).
-
-Responsibilities:
-- Use standard ICAO phraseology
-- Provide clear, concise instructions based on pilot requests
-- Ensure flight safety and maintain airspace order
-- Maintain a professional, calm tone
-
-Standard phraseology examples:
-- Takeoff clearance: "XX Air XXX, runway XX, cleared for takeoff, wind XX at XX"
-- Altitude instruction: "XX Air XXX, descend and maintain flight level XXX"
-- Heading instruction: "XX Air XXX, turn left heading XXX"
-- Frequency change: "XX Air XXX, contact XX Approach XXX.X"
-
-Important notes:
-- Always use airline callsign (e.g., "Air China 123")
-- Altitude in feet
-- Wind direction in degrees, speed in knots
-- Keep responses concise and clear"#
+            include_str!("../../../docs/atc-phraseology/english.md")
         };
         
         if let Some(data) = flight_data {
-            format!(
-                "{}\n\n当前飞行数据：\n- 呼号：{}\n- 高度：{:.0} 英尺\n- 速度：{:.0} 节\n- 航向：{:.0}°",
-                base_prompt, data.callsign, data.altitude, data.speed, data.heading
-            )
+            let context = if language == "zh" {
+                format!(
+                    "\n\n## 当前飞行数据\n\n- 呼号：{}\n- 高度：{:.0} 米\n- 速度：{:.0} 节\n- 航向：{:.0}°\n\n根据以上飞行数据和飞行员的请求，给出一条符合标准的管制指令。",
+                    data.callsign, 
+                    data.altitude * 0.3048,  // 英尺转米
+                    data.speed, 
+                    data.heading
+                )
+            } else {
+                format!(
+                    "\n\n## Current Flight Data\n\n- Callsign: {}\n- Altitude: {:.0} feet\n- Speed: {:.0} knots\n- Heading: {:.0}°\n\nBased on the flight data and pilot request, provide one standard ATC instruction.",
+                    data.callsign, data.altitude, data.speed, data.heading
+                )
+            };
+            format!("{}{}", base_prompt, context)
         } else {
             base_prompt.to_string()
         }
