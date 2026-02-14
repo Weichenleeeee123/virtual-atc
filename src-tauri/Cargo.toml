@@ -29,3 +29,5 @@ hound = "3.5"
 whisper-rs = "0.12"
 rodio = "0.17"
 
+rusqlite = { version = "0.31", features = ["bundled"] }
+dirs = "5.0"

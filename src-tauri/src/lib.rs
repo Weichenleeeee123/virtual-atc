@@ -10,6 +10,7 @@ use modules::tts::TTSEngine;
 use modules::msfs::MSFSConnection;
 use modules::flight_phase::{FlightPhaseDetector, FlightPhase};
 use modules::atc_database::ATCDatabase;
+use modules::little_navmap::LittleNavmapDB;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -22,6 +23,7 @@ struct AppState {
     current_sim: Mutex<String>, // "xplane" or "msfs"
     phase_detector: Mutex<FlightPhaseDetector>,
     atc_database: Mutex<ATCDatabase>,
+    little_navmap: Mutex<Option<LittleNavmapDB>>,
 }
 
 #[tauri::command]
@@ -281,6 +283,19 @@ pub fn run() {
     let tts_engine = TTSEngine::new();
     let atc_db = ATCDatabase::new();
     
+    // 尝试加载 Little Navmap 数据库
+    let little_navmap = match LittleNavmapDB::new() {
+        Ok(db) => {
+            println!("✓ Little Navmap 数据库加载成功");
+            Some(db)
+        }
+        Err(e) => {
+            println!("⚠ Little Navmap 数据库未找到: {}", e);
+            println!("  提示：安装 Little Navmap 以获取完整的机场数据");
+            None
+        }
+    };
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState {
@@ -292,6 +307,7 @@ pub fn run() {
             current_sim: Mutex::new(String::new()),
             phase_detector: Mutex::new(FlightPhaseDetector::new()),
             atc_database: Mutex::new(atc_db),
+            little_navmap: Mutex::new(little_navmap),
         })
         .invoke_handler(tauri::generate_handler![
             connect_simulator,
